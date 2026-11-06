@@ -1,0 +1,38 @@
+@model List<MediaItem>
+@{ ViewData["Title"] = "Drone imagery"; var fields = (List<string>)ViewBag.Fields; var audit = (List<Azure.Data.Tables.TableEntity>)ViewBag.Audit; }
+<h2>Drone imagery</h2>
+
+<form asp-action="Upload" method="post" enctype="multipart/form-data" class="row g-2 mb-4">
+    <div class="col-auto"><select name="fieldId" class="form-select">@foreach (var f in fields) { <option>@f</option> }</select></div>
+    <div class="col-auto"><input type="file" name="file" accept="image/jpeg,image/png,image/tiff" class="form-control" /></div>
+    <div class="col-auto"><button class="btn btn-success">Upload to Blob Storage</button></div>
+</form>
+
+<div class="row">
+    <div class="col-lg-7">
+        <h5>Uploaded images</h5>
+        <table class="table table-sm">
+            <thead><tr><th>Field</th><th>File</th><th>Size</th><th>Uploaded</th></tr></thead>
+            <tbody>
+            @foreach (var m in Model)
+            {
+                <tr><td>@m.Field</td><td><a href="/Media/File/@m.Name" target="_blank">@m.Name.Split('/').Last()</a></td><td>@(m.Size / 1024) KB</td><td>@m.UploadedAt?.ToString("u")</td></tr>
+            }
+            @if (!Model.Any()) { <tr><td colspan="4">No images yet.</td></tr> }
+            </tbody>
+        </table>
+    </div>
+    <div class="col-lg-5">
+        <h5>Processing audit (Table Storage)</h5>
+        <table class="table table-sm">
+            <thead><tr><th>Blob</th><th>Status</th></tr></thead>
+            <tbody>
+            @foreach (var a in audit)
+            {
+                <tr><td class="text-break">@a.GetString("BlobName")</td><td>@a.GetString("Status")</td></tr>
+            }
+            @if (!audit.Any()) { <tr><td colspan="2">No audit entries yet.</td></tr> }
+            </tbody>
+        </table>
+    </div>
+</div>

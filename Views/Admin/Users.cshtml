@@ -1,0 +1,47 @@
+@model List<AppUser>
+@{ ViewData["Title"] = "Administration"; }
+<h2>User management</h2>
+<table class="table">
+    <thead><tr><th>Username</th><th>Role</th><th>Assigned fields (farmers)</th></tr></thead>
+    <tbody>
+    @foreach (var u in Model)
+    {
+        <tr>
+            <td>@u.Username</td>
+            <td>
+                <form asp-action="SetRole" method="post" class="d-flex gap-2">
+                    <input type="hidden" name="id" value="@u.Id" />
+                    <select name="role" class="form-select form-select-sm w-auto">
+                        @foreach (var r in Roles.All) { <option value="@r" selected="@(r == u.Role)">@r</option> }
+                    </select>
+                    <button class="btn btn-sm btn-outline-success">Save</button>
+                </form>
+            </td>
+            <td>
+                @if (u.Role == Roles.Farmer)
+                {
+                    <form asp-action="SetFields" method="post" class="d-flex flex-wrap align-items-center gap-3">
+                        <input type="hidden" name="id" value="@u.Id" />
+                        @foreach (var f in (List<string>)ViewBag.Fields)
+                        {
+                            var owners = ((Dictionary<string, List<int>>)ViewBag.FieldOwners)[f];
+                            <div class="form-check">
+                                <!input class="form-check-input" type="checkbox" name="fields" value="@f" id="f-@u.Id-@f" checked="@owners.Contains(u.Id)" />
+                                <label class="form-check-label" for="f-@u.Id-@f">@f</label>
+                            </div>
+                        }
+                        <button class="btn btn-sm btn-outline-success">Save fields</button>
+                    </form>
+                }
+                else { <span class="text-muted small">Sees all fields</span> }
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h5 class="mt-4">Demo data</h5>
+<form asp-action="SimulateTelemetry" method="post" class="d-flex gap-2">
+    <input type="number" name="rounds" value="5" min="1" max="50" class="form-control w-auto" />
+    <button class="btn btn-outline-primary">Generate simulated sensor readings</button>
+</form>

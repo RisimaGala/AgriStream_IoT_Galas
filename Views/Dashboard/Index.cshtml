@@ -1,0 +1,94 @@
+@model DashboardViewModel
+@{ ViewData["Title"] = "Field dashboard"; }
+<h2>Field dashboard</h2>
+
+@if (Model.SelectedField == null)
+{
+    <div class="alert alert-info">No fields are assigned to your account yet.</div>
+    return;
+}
+
+<div class="mb-3">
+    @foreach (var f in Model.Fields)
+    {
+        <a asp-action="Index" asp-route-field="@f" class="btn btn-sm @(f == Model.SelectedField ? "btn-success" : "btn-outline-success")">@f</a>
+    }
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <h5>Latest telemetry <small class="text-muted" id="updated"></small></h5>
+        <table class="table table-sm table-striped">
+            <thead><tr><th>Time (UTC)</th><th>Device</th><th>Moisture %</th><th>Soil °C</th><th>pH</th><th>Air °C</th><th>Humidity %</th></tr></thead>
+            <tbody id="readings"><tr><td colspan="7">Loading…</td></tr></tbody>
+        </table>
+    </div>
+    <div class="col-lg-4">
+        <h5>Irrigation devices</h5>
+        @foreach (var d in Model.Devices)
+        {
+            <div class="card mb-2"><div class="card-body p-2">
+                <strong>@d.Name</strong> <span class="badge bg-secondary" data-status="@d.DeviceId">@d.Status</span>
+                <div class="small text-muted" data-last="@d.DeviceId">@(d.LastCommand ?? "no commands yet")</div>
+                <form asp-action="TriggerIrrigation" method="post" class="mt-1 d-flex gap-1">
+                    <input type="hidden" name="deviceId" value="@d.DeviceId" />
+                    <input type="number" name="minutes" value="15" min="1" max="120" class="form-control form-control-sm" style="width:80px" title="Minutes" />
+                    <button name="action" value="START" class="btn btn-sm btn-primary">Trigger Irrigation</button>
+                    <button name="action" value="STOP" class="btn btn-sm btn-outline-secondary">Stop</button>
+                </form>
+            </div></div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+<script>
+    const field = @Json.Serialize(Model.SelectedField);
+    const fmt = v => (v === undefined || v === null) ? '' : Number(v).toFixed(1);
+    const rowHtml = x =>
+        `<tr><td>${x.readingAtUtc ?? ''}</td><td>${x.deviceId}</td><td>${fmt(x.soilMoisture)}</td><td>${fmt(x.soilTemperature)}</td><td>${fmt(x.soilPh)}</td><td>${fmt(x.airTemperature)}</td><td>${fmt(x.humidity)}</td></tr>`;
+
+    // Live push: new readings arrive over SignalR and are prepended immediately.
+    const conn = new signalR.HubConnectionBuilder().withUrl('/hubs/telemetry').withAutomaticReconnect().build();
+    conn.on('reading', x => {
+        const tb = document.getElementById('readings');
+        if (tb.querySelector('td[colspan]')) tb.innerHTML = '';
+        tb.insertAdjacentHTML('afterbegin', rowHtml(x));
+        while (tb.rows.length > 20) tb.deleteRow(-1);
+        document.getElementById('updated').textContent = '(live ' + new Date().toLocaleTimeString() + ')';
+    });
+    // Live push: irrigation status changes (Idle / Irrigating) made by the queue-triggered function.
+    conn.on('deviceStatus', d => {
+        const b = document.querySelector(`[data-status="${d.deviceId}"]`);
+        if (b) {
+            b.textContent = d.status;
+            b.className = 'badge ' + (d.status === 'Irrigating' ? 'bg-success' : 'bg-secondary');
+        }
+        const l = document.querySelector(`[data-last="${d.deviceId}"]`);
+        if (l) l.textContent = d.lastCommand ? `${d.lastCommand} at ${d.lastCommandAtUtc}` : 'no commands yet';
+    });
+    const joinField = () => conn.invoke('JoinField', field).catch(e => console.error(e));
+    conn.onreconnected(joinField);
+    conn.start().then(joinField).catch(e => console.error('SignalR connect failed', e));
+
+    async function refresh() {
+        try {
+            const r = await fetch('/Dashboard/Telemetry?field=' + encodeURIComponent(field));
+            if (!r.ok) throw new Error(r.status);
+            const rows = await r.json();
+            document.getElementById('readings').innerHTML = rows.length ? rows.map(rowHtml).join('')
+                : '<tr><td colspan="7">No readings yet.</td></tr>';
+            document.getElementById('updated').textContent = '(updated ' + new Date().toLocaleTimeString() + ')';
+        } catch (e) { document.getElementById('updated').textContent = '(telemetry unavailable)'; }
+        try {
+            const s = await (await fetch('/Dashboard/DeviceStatus?field=' + encodeURIComponent(field))).json();
+            s.forEach(d => {
+                const b = document.querySelector(`[data-status="${d.deviceId}"]`); if (b) b.textContent = d.status;
+                const l = document.querySelector(`[data-last="${d.deviceId}"]`); if (l) l.textContent = d.lastCommand ? `${d.lastCommand} at ${d.lastCommandAtUtc}` : 'no commands yet';
+            });
+        } catch (e) { }
+    }
+    refresh(); setInterval(refresh, 30000); // fallback; live updates come from SignalR
+</script>
+}

@@ -1,0 +1,170 @@
+@model AgronomistViewModel
+@{
+    ViewData["Title"] = "Agronomy";
+    var a = Model.Analysis;
+    string Badge(string level) => level switch { "danger" => "danger", "warning" => "warning text-dark", _ => "success" };
+    string Alert(string level) => level switch { "danger" => "danger", "warning" => "warning", _ => "success" };
+}
+<h2>Agronomy dashboard</h2>
+<p class="text-muted">Crop, soil and water decisions from live sensor data and long-term harvest records.</p>
+
+@if (Model.SelectedField == null)
+{
+    <div class="alert alert-info">No fields are registered yet.</div>
+    return;
+}
+
+<div class="mb-3">
+    @foreach (var f in Model.Fields)
+    {
+        <a asp-action="Index" asp-route-field="@f" class="btn btn-sm @(f == Model.SelectedField ? "btn-success" : "btn-outline-success")">@f</a>
+    }
+    <a asp-controller="Dashboard" asp-action="Index" asp-route-field="@Model.SelectedField" class="btn btn-sm btn-outline-secondary ms-2">Irrigation controls</a>
+    <a asp-controller="Media" asp-action="Index" class="btn btn-sm btn-outline-secondary">Drone imagery</a>
+</div>
+
+@* ---- 1. Live conditions ---- *@
+<h5>Field conditions <small class="text-muted">average of the latest @a!.Samples readings</small> <small class="text-muted" id="live"></small></h5>
+@if (a.Samples == 0)
+{
+    <div class="alert alert-info">No sensor readings yet for this field. Run <code>loadtest\Simulate-Sensors.ps1</code> or use <em>Admin → Generate simulated sensor readings</em>.</div>
+}
+else
+{
+    <div class="row g-2 mb-3">
+        @foreach (var (label, value, unit) in new[] {
+            ("Soil moisture", a.Moisture.ToString("0.0"), "%"), ("Soil temp", a.SoilTemp.ToString("0.0"), "°C"),
+            ("Soil pH", a.Ph.ToString("0.00"), ""), ("Air temp", a.AirTemp.ToString("0.0"), "°C"), ("Humidity", a.Humidity.ToString("0.0"), "%") })
+        {
+            <div class="col-6 col-md"><div class="card text-center"><div class="card-body py-2">
+                <div class="small text-muted">@label</div><div class="fs-4">@value<small>@unit</small></div>
+            </div></div></div>
+        }
+    </div>
+}
+
+<div class="row">
+    <div class="col-lg-7">
+        @* ---- 2. Advice ---- *@
+        <h5>Recommendations</h5>
+        @if (a.Recommendations.Count == 0) { <p class="text-muted">Advice appears once readings are available.</p> }
+        @foreach (var r in a.Recommendations)
+        {
+            <div class="alert alert-@Alert(r.Level) py-2 mb-2"><span class="badge bg-@Badge(r.Level) me-2">@r.Topic</span>@r.Text</div>
+        }
+        <p class="small text-muted">Rule-of-thumb guidance from sensor averages. Confirm major decisions (liming, fertiliser rates) with a lab soil test.</p>
+
+        <h5 class="mt-4">Soil moisture and temperature trend</h5>
+        <canvas id="trend" height="110"></canvas>
+    </div>
+
+    <div class="col-lg-5">
+        @* ---- 3. Harvest history ---- *@
+        <h5>Harvest and yield history</h5>
+        @if (Model.Harvests.Count == 0)
+        {
+            <p class="text-muted">No harvest records for this field yet.</p>
+            <form asp-action="SeedSample" method="post" class="mb-3">
+                <input type="hidden" name="field" value="@Model.SelectedField" />
+                <button class="btn btn-sm btn-outline-secondary">Load sample harvest history</button>
+            </form>
+        }
+        else
+        {
+            @if (Model.YieldInsight != null) { <div class="alert alert-secondary py-2">@Model.YieldInsight</div> }
+            <canvas id="yield" height="130" class="mb-2"></canvas>
+            <table class="table table-sm">
+                <thead><tr><th>Season</th><th>Crop</th><th>Area (ha)</th><th>Yield (t)</th><th>t/ha</th></tr></thead>
+                <tbody>
+                @foreach (var h in Model.Harvests.OrderByDescending(x => x.Season))
+                {
+                    <tr title="Recorded by @h.RecordedBy"><td>@h.Season</td><td>@h.Crop</td><td>@h.AreaHa.ToString("0.#")</td><td>@h.YieldTonnes.ToString("0.#")</td><td>@h.YieldPerHa.ToString("0.00")</td></tr>
+                }
+                </tbody>
+            </table>
+        }
+        <form asp-action="AddHarvest" method="post" class="row g-1 mb-4">
+            <input type="hidden" name="field" value="@Model.SelectedField" />
+            <div class="col-3"><input name="season" class="form-control form-control-sm" placeholder="2026/27" required /></div>
+            <div class="col-3"><input name="crop" class="form-control form-control-sm" placeholder="Crop" required /></div>
+            <div class="col-2"><input name="areaHa" type="number" step="0.1" min="0.1" class="form-control form-control-sm" placeholder="ha" required /></div>
+            <div class="col-2"><input name="yieldTonnes" type="number" step="0.1" min="0" class="form-control form-control-sm" placeholder="tonnes" required /></div>
+            <div class="col-2"><button class="btn btn-sm btn-success w-100">Add</button></div>
+        </form>
+    </div>
+</div>
+
+@* ---- 4. Scouting ---- *@
+<h5>Pest, disease and weed scouting</h5>
+<form asp-action="AddNote" method="post" class="row g-2 mb-3">
+    <input type="hidden" name="field" value="@Model.SelectedField" />
+    <div class="col-md-2">
+        <select name="category" class="form-select form-select-sm">@foreach (var c in (string[])ViewBag.Categories) { <option>@c</option> }</select>
+    </div>
+    <div class="col-md-2">
+        <select name="severity" class="form-select form-select-sm">@foreach (var s in (string[])ViewBag.Severities) { <option>@s</option> }</select>
+    </div>
+    <div class="col-md-3"><input name="note" class="form-control form-control-sm" placeholder="What did you observe?" required /></div>
+    <div class="col-md-3"><input name="advice" class="form-control form-control-sm" placeholder="Advice / action for the farmer" /></div>
+    <div class="col-md-2"><button class="btn btn-sm btn-success w-100">Save note</button></div>
+</form>
+@if (Model.Notes.Count == 0) { <p class="text-muted">No scouting notes for this field.</p> }
+else
+{
+    <table class="table table-sm">
+        <thead><tr><th>When (UTC)</th><th>Type</th><th>Severity</th><th>Observation</th><th>Advice</th><th>By</th></tr></thead>
+        <tbody>
+        @foreach (var n in Model.Notes)
+        {
+            <tr>
+                <td>@n.RecordedAtUtc?.ToString("yyyy-MM-dd HH:mm")</td><td>@n.Category</td>
+                <td><span class="badge bg-@(n.Severity == "High" ? "danger" : n.Severity == "Medium" ? "warning text-dark" : "secondary")">@n.Severity</span></td>
+                <td>@n.Note</td><td>@n.Advice</td><td>@n.RecordedBy</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+<script>
+    const labels = @Json.Serialize(a.Labels), moisture = @Json.Serialize(a.MoistureSeries), temp = @Json.Serialize(a.SoilTempSeries);
+    const trend = new Chart(document.getElementById('trend'), {
+        type: 'line',
+        data: { labels, datasets: [
+            { label: 'Soil moisture %', data: moisture, borderColor: '#0d6efd', tension: .3, pointRadius: 0 },
+            { label: 'Soil temp °C', data: temp, borderColor: '#fd7e14', tension: .3, pointRadius: 0 }] },
+        options: { animation: false, scales: { x: { ticks: { maxTicksLimit: 6 } } } }
+    });
+
+    // Live push: append each new reading for this field to the trend chart.
+    const field = @Json.Serialize(Model.SelectedField);
+    const conn = new signalR.HubConnectionBuilder().withUrl('/hubs/telemetry').withAutomaticReconnect().build();
+    conn.on('reading', x => {
+        trend.data.labels.push(new Date().toLocaleTimeString());
+        trend.data.datasets[0].data.push(x.soilMoisture);
+        trend.data.datasets[1].data.push(x.soilTemperature);
+        if (trend.data.labels.length > 60) { trend.data.labels.shift(); trend.data.datasets.forEach(d => d.data.shift()); }
+        trend.update();
+        document.getElementById('live').textContent = '(live ' + new Date().toLocaleTimeString() + ')';
+    });
+    const join = () => conn.invoke('JoinField', field).catch(console.error);
+    conn.onreconnected(join); conn.start().then(join).catch(console.error);
+
+    @if (Model.Harvests.Count > 0)
+    {
+        var seasons = Model.Harvests.Select(h => h.Season).Distinct().OrderBy(s => s).ToList();
+        <text>
+        const seasons = @Json.Serialize(seasons);
+        const yields = @Json.Serialize(seasons.Select(s => Model.Harvests.Where(h => h.Season == s).Sum(h => h.YieldTonnes) / Math.Max(Model.Harvests.Where(h => h.Season == s).Sum(h => h.AreaHa), 0.0001)).Select(v => Math.Round(v, 2)));
+        new Chart(document.getElementById('yield'), {
+            type: 'bar',
+            data: { labels: seasons, datasets: [{ label: 'Yield (t/ha)', data: yields, backgroundColor: '#198754' }] },
+            options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+        </text>
+    }
+</script>
+}

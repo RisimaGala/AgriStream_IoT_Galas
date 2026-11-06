@@ -1,0 +1,11 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "StorageConnection": "UseDevelopmentStorage=true",
+    "WebAppUrl": "https://localhost:7155",
+    "IngestApiKey": "change-me-sensor-key",
+    "SqlConnection": "Server=(localdb)\\MSSQLLocalDB;Database=AgriStream;Trusted_Connection=True;"
+  }
+}

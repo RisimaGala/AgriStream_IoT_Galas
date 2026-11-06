@@ -1,0 +1,18 @@
+﻿@{ ViewData["Title"] = "Home"; }
+<div class="text-center py-5">
+    <h1 class="display-5">AgriStream IoT</h1>
+    <p class="lead">Smart monitoring for large-scale commercial farms: soil telemetry, drone imagery and remote irrigation control.</p>
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <a class="btn btn-success btn-lg" asp-controller="Dashboard" asp-action="Index">Open dashboard</a>
+    }
+    else
+    {
+        <a class="btn btn-success btn-lg" asp-controller="Account" asp-action="Login">Sign in</a>
+        <a class="btn btn-outline-success btn-lg" asp-controller="Account" asp-action="Register">Register as a farmer</a>
+    }
+    <div class="mt-5">
+        <img src="~/images/farm.png" alt="Cattle grazing on green farmland at sunset"
+             class="img-fluid rounded shadow" style="max-height:420px;" />
+    </div>
+</div>
