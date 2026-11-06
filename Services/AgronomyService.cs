@@ -118,14 +118,20 @@ public class AgronomyService
         });
     }
 
+    /// <summary>Compares the two latest seasons of the SAME crop (maize vs soybean yields are not comparable).</summary>
     public static string? YieldInsight(List<HarvestRecord> h)
     {
-        var bySeason = h.GroupBy(x => x.Season).OrderBy(g => g.Key).ToList();
-        if (bySeason.Count < 2) return h.Count == 0 ? null : "Add at least two seasons of harvest records to see yield trends.";
-        double Y(IGrouping<string, HarvestRecord> g) => g.Sum(x => x.YieldTonnes) / Math.Max(g.Sum(x => x.AreaHa), 0.0001);
-        var last = Y(bySeason[^1]); var prev = Y(bySeason[^2]);
-        var pct = prev > 0 ? Math.Round((last - prev) / prev * 100, 1) : 0;
-        return $"Yield per hectare {(pct >= 0 ? "rose" : "fell")} {Math.Abs(pct)}% from {bySeason[^2].Key} ({prev:0.0} t/ha) to {bySeason[^1].Key} ({last:0.0} t/ha).";
+        if (h.Count == 0) return null;
+        foreach (var crop in h.OrderByDescending(x => x.Season).Select(x => x.Crop).Distinct())
+        {
+            var rows = h.Where(x => x.Crop == crop).OrderBy(x => x.Season).ToList();
+            if (rows.Count < 2) continue;
+            var prev = rows[^2]; var last = rows[^1];
+            if (prev.YieldPerHa <= 0) continue;
+            var pct = Math.Round((last.YieldPerHa - prev.YieldPerHa) / prev.YieldPerHa * 100, 1);
+            return $"{crop}: yield per hectare {(pct >= 0 ? "rose" : "fell")} {Math.Abs(pct)}% from {prev.Season} ({prev.YieldPerHa:0.0} t/ha) to {last.Season} ({last.YieldPerHa:0.0} t/ha).";
+        }
+        return "Add two seasons of the same crop to see a yield trend.";
     }
 
     /// <summary>Inserts clearly labelled sample history so the yield charts can be demonstrated.</summary>

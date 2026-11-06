@@ -27,7 +27,13 @@
 <h5>Field conditions <small class="text-muted">average of the latest @a!.Samples readings</small> <small class="text-muted" id="live"></small></h5>
 @if (a.Samples == 0)
 {
-    <div class="alert alert-info">No sensor readings yet for this field. Run <code>loadtest\Simulate-Sensors.ps1</code> or use <em>Admin → Generate simulated sensor readings</em>.</div>
+    <div class="alert alert-info d-flex flex-wrap align-items-center gap-3">
+        <span>No sensor readings yet for this field. Real sensors send data to <code>/api/ingest</code>; until they do, you can add simulated readings.</span>
+        <form asp-action="SeedReadings" method="post" class="m-0">
+            <input type="hidden" name="field" value="@Model.SelectedField" />
+            <button class="btn btn-sm btn-success">Add simulated sensor readings</button>
+        </form>
+    </div>
 }
 else
 {

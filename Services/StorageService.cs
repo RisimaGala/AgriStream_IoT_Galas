@@ -112,9 +112,9 @@ public class StorageService
     }
 
     /// <summary>Writes one sensor reading. RowKey is inverted ticks so newest rows sort first.</summary>
-    public Task AddReadingAsync(string fieldId, string deviceId, double moisture, double soilTemp, double ph, double airTemp, double humidity)
+    public Task AddReadingAsync(string fieldId, string deviceId, double moisture, double soilTemp, double ph, double airTemp, double humidity, DateTime? at = null)
     {
-        var now = DateTime.UtcNow;
+        var now = at ?? DateTime.UtcNow;
         var e = new TableEntity(fieldId, $"{DateTime.MaxValue.Ticks - now.Ticks:d19}-{deviceId}")
         {
             ["DeviceId"] = deviceId,

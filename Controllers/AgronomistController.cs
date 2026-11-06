@@ -80,6 +80,28 @@ public class AgronomistController : Controller
         return RedirectToAction(nameof(Index), new { field });
     }
 
+    /// <summary>Backfills ~2 hours of simulated readings for this field so the analysis and charts have data to work with.</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> SeedReadings(string field, [FromServices] StorageService storage)
+    {
+        var devices = await _db.Devices.AsNoTracking().Where(d => d.FieldId == field).ToListAsync();
+        if (devices.Count == 0) return NotFound();
+        var rnd = new Random();
+        var start = DateTime.UtcNow.AddMinutes(-120);
+        double moisture = 32 + rnd.NextDouble() * 20;
+        for (var i = 0; i < 24; i++)                       // one round every 5 minutes
+        {
+            moisture = Math.Clamp(moisture + (rnd.NextDouble() - 0.55) * 4, 18, 70);
+            foreach (var d in devices)
+                await storage.AddReadingAsync(field, d.DeviceId,
+                    Math.Round(moisture + (rnd.NextDouble() - 0.5) * 3, 1), Math.Round(17 + rnd.NextDouble() * 8, 1),
+                    Math.Round(6.1 + rnd.NextDouble() * 0.9, 2), Math.Round(20 + rnd.NextDouble() * 10, 1),
+                    Math.Round(45 + rnd.NextDouble() * 30, 1), start.AddMinutes(i * 5).AddSeconds(devices.IndexOf(d)));
+        }
+        TempData["Success"] = $"Added {24 * devices.Count} simulated sensor readings for {field}.";
+        return RedirectToAction(nameof(Index), new { field });
+    }
+
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> SeedSample(string field)
     {
